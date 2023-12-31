@@ -46,11 +46,11 @@
 
 附上两张项目成员合照
 <div style="display: flex; justify-content: center;">
-    <img src="./assets/mini_1.jpg" height=500></img>
+    <img src="./assets/mini_1.jpg" height=500>
 </div>
 <p style="text-align: center;"></p>
 <div style="display: flex; justify-content: center;">
-    <img src="./assets/mini_2.jpg" height=500></img>
+    <img src="./assets/mini_2.jpg" height=500>
 </div>
 
 而后就是实习期间的四人帮了，除了之前mini项目同组的同学y，还认识了隔壁组的同学j和成电的同学s，大家相处得非常愉快，经常一起吃饭和下班，~~指吃完晚饭就开始讨论几点下班~~
