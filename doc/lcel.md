@@ -3,6 +3,34 @@
 - 2024-06-17
 - hcd233
 
+## GPT省流
+
+### 核心观点回顾
+
+1. **组件编排的简化**：
+    - **传统方法**：显式地创建并串联多个LLMChain。
+    - **LCEL方法**：通过管道符号`|`简化编排过程，适用于多种Langchain组件（如`PromptTemplate`、`ChatModel`、`Retriever`、`OutputParser`、`Tool`等），甚至用户自定义的Python函数。
+
+2. **Runnable的核心作用**：
+    - **定义**：`Runnable`作为可编排组件的核心接口，提供了包括`invoke`、`stream`、`batch`等抽象方法，奠定了组件自由编排的基础。
+    - **子类**：`RunnableSerializable`继承自`Runnable`并提供序列化功能，成为Langchain组件的统一基础接口。
+
+3. **多种类型的Runnable**：
+    - **RunnableSequence**：串联多个Runnable实例，形成顺序执行的链条。
+    - **RunnableParallel**：并行执行多个Runnable实例，提高执行效率。
+    - **RunnableLambda**：将Python函数封装为Runnable，使函数也能参与到LCEL的编排中。
+    - **RunnableBranch**：实现条件分支逻辑，类似RouterChain，用于根据条件选择不同的执行路径。
+
+### LCEL的优势
+
+- **高效开发**：通过简洁的语法和统一的接口，提高AI应用开发的效率。
+- **灵活性**：支持多种类型的组件和自定义函数的编排，灵活组合不同的组件。
+- **可扩展性**：通过定义明确的输入输出接口和抽象方法，为未来扩展和新组件的加入提供良好支持。
+
+### 结语
+
+LCEL（Langchain Expression Language）通过“一切组件皆可编排”的设计思想，使得AI应用的开发更加便捷和高效。希望通过本文，你能深入了解Langchain的底层原理，后续将有更多关于Langchain组件的介绍文章，敬请关注。
+
 ## 前言
 
 如今`Langchain`已是大语言模型应用开发的事实标准框架，早在Langchain推出第一个稳定版本v0.1.0时，就已提出了一种新的Langchain范式：`Langchain Expression Language`简称`LCEL`，在本篇文章中将会全面地介绍LCEL的设计思想以及具体的实现。
@@ -523,7 +551,7 @@ class RunnableBranch(RunnableSerializable[Input, Output]):
 
 ## 总结
 
-通过本文的深入探讨，我们可以看到LCEL（Langchain Expression Language）在Langchain框架中的重要性和创新性。LCEL的设计思想“一切组件皆可编排”使得AI应用的开发更加便捷和高效。我们通过实际的代码示例，展示了如何利用管道符号`|`来简化和优化LLMChain的串联操作。
+通过本文的深入探讨，我们可以看到LCEL（Langchain Expression Language）在Langchain框架中的重要性和创新性。LCEL的设计思想“一切组件皆可编排”使得AI应用的开发更加便捷和高效。
 
 ### 核心观点回顾
 
