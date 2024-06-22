@@ -3,13 +3,13 @@
 - 2024-06-17
 - hcd233
 
-### 前言
+## 前言
 
 如今`Langchain`已是大语言模型应用开发的事实标准框架，早在Langchain推出第一个稳定版本v0.1.0时，就已提出了一种新的Langchain范式：`Langchain Expression Language`简称`LCEL`，在本篇文章中将会全面地介绍LCEL的设计思想以及具体的实现。
 
-### 设计思想：一切组件皆可编排
+## 设计思想：一切组件皆可编排
 
-早在去年9月时，我便在鹅厂参与一款AI应用的开发，当时我们有一个功能，需要**初始化三个不同的LLMChain，并且将他们串联到一起**，我们当时是这么做的
+早在去年9月时，我便在鹅厂参与一款AI应用的后台开发，也是用的langchain当时我们有一个功能，需要**初始化三个不同的LLMChain，并且将他们串联到一起**，我们当时是这么做的
 
 ```python
 chain1 = LLMChain(
@@ -54,15 +54,15 @@ overall_chain = chain1 | chain2 | chain3
 | Retriever | str | List[Document] |
 | Tool | Dict[str, Any] | Any |
 
-那么仔细一想，如果说我们能给Langchain的这些组件制定统一的规范，并且重写和实现一些魔术方法，是不是就可以实现组件的自由编排了？
+那么仔细一想，如果说我们能给Langchain的这些组件**制定统一的规范**，并且**重写和实现一些魔术方法**，是不是就可以实现组件的自由编排了？
 
 事实上确实如此，接下来，我们来一起看看LCEL的底层是怎样给组件定下统一的规范的
 
-### Runnable：LCEL的驱动核心
+## Runnable：LCEL的驱动核心
 
-如果你使用Langchain来构建AI应用，则或多或少都会接触过Runnable，这里无需多言，直接看源码
+目前AI应用有个很火的概念叫管道化，意思为AI无论是知识库还是提示词、工具等都是可以自由编排和组合的，如果你使用Langchain来构建一个可编排的AI应用，则或多或少都会接触过`Runnable`，`Runnable`正是Langchain可编排能力的核心，这里无需多言，直接看源码
 
-#### Runnable：最底层的抽象
+### Runnable：最底层的抽象
 
 首先直接看源码，在包langchain_core.runnable.base中可以清晰看到Runnable的定义
 
@@ -148,7 +148,7 @@ def __or__(
 
 接下来我们直接来看他有哪些子类，这里如果你仔细看下来，你会发现只有一个叫`RunnableSerializable`的类继承了它，这里`RunnableSerializable`继承了Langchain的一个工具基类`Serializable`，用于方便Langchain组件进行序列化。
 
-#### RunnableSerializable：组件的统一接口
+### RunnableSerializable：组件的统一接口
 
 ```python
 class RunnableSerializable(Serializable, Runnable[Input, Output]):
@@ -160,7 +160,7 @@ class Serializable(BaseModel, ABC):
 
 这里我们可以确定，`RunnableSerializable`才是Langchain组件统一继承的接口，`Runnable`相当于只是为组件提供基本抽象的接口
 
-#### RunnableSequence：串联Runnable的子类
+### RunnableSequence：串联Runnable的子类
 
 这个`RunnableSequence`有点`SequentialChain`的感觉了，这里我放关键的源码出来，挺好看懂的
 
@@ -244,7 +244,7 @@ class RunnableSequence(RunnableSerializable[Input, Output]):
 
 看到这里应该有点感觉了，这里`RunnableSequence`就是为了串联Runnable而存在的，还记得我们前面的那段代码实例吗？在执行完overall_chain = chain1 | chain2 | chain3后，这里的overall_chain就会是一个`RunnableSequence`对象
 
-#### RunnableParallel：并行Runnable的子类
+### RunnableParallel：并行Runnable的子类
 
 这个`RunnableParallel`我比较少用，这里还是直接贴关键源码，大致明白它的原理就ok了
 
@@ -306,10 +306,9 @@ class RunnableParallel(RunnableSerializable[Input, Dict[str, Any]]):
 
 这里看下来`RunnableParallel`只是开了个线程池来invoke map中所有的runnable对象，没啥意思。
 
+### RunnableLambda: 将函数封装成Runnable
 
-#### RunnableLambda: 将函数封装成Runnable
-
-当时LCEL还有一个特性，就是可以用管道`"|"`直接连接函数和Runnable，实际上底层就将函数转换成了RunnableLambda，这里也放出关键的源码
+当时LCEL还有一个特性，就是可以用管道`"|"`直接连接函数和Runnable，实际上底层就将函数转换成了`RunnableLambda`，这里也放出关键的源码
 
 ```python
 class RunnableLambda(Runnable[Input, Output]):
@@ -379,6 +378,173 @@ class RunnableLambda(Runnable[Input, Output]):
         return cast(Output, output)
 ```
 
-这里我理解`RunnableLambda`只不够是func的一层wrapper，实际上只是为了把函数转换成RunnableLambda而已
+这里我理解`RunnableLambda`只不过是func的一层wrapper，实际上只是为了把函数转换成`Runnable`而已
 
+### RunnableBranch
 
+`RunnableBranch`的主要作用类似原先的`RouterChain`，实现分支选择的逻辑，这里放出最关键的构造函数和invoke函数，看这两个基本能摸清楚它的原理了
+
+```python
+class RunnableBranch(RunnableSerializable[Input, Output]):
+    """Runnable that selects which branch to run based on a condition.
+
+    The Runnable is initialized with a list of (condition, Runnable) pairs and
+    a default branch.
+
+    When operating on an input, the first condition that evaluates to True is
+    selected, and the corresponding Runnable is run on the input.
+
+    If no condition evaluates to True, the default branch is run on the input.
+
+    Examples:
+
+        .. code-block:: python
+
+            from langchain_core.runnables import RunnableBranch
+
+            branch = RunnableBranch(
+                (lambda x: isinstance(x, str), lambda x: x.upper()),
+                (lambda x: isinstance(x, int), lambda x: x + 1),
+                (lambda x: isinstance(x, float), lambda x: x * 2),
+                lambda x: "goodbye",
+            )
+
+            branch.invoke("hello") # "HELLO"
+            branch.invoke(None) # "goodbye"
+    """
+
+    branches: Sequence[Tuple[Runnable[Input, bool], Runnable[Input, Output]]]
+    default: Runnable[Input, Output]
+
+    def __init__(
+        self,
+        *branches: Union[
+            Tuple[
+                Union[
+                    Runnable[Input, bool],
+                    Callable[[Input], bool],
+                    Callable[[Input], Awaitable[bool]],
+                ],
+                RunnableLike,
+            ],
+            RunnableLike,  # To accommodate the default branch
+        ],
+    ) -> None:
+        """A Runnable that runs one of two branches based on a condition."""
+        if len(branches) < 2:
+            raise ValueError("RunnableBranch requires at least two branches")
+
+        default = branches[-1]
+
+        if not isinstance(
+            default,
+            (Runnable, Callable, Mapping),  # type: ignore[arg-type]
+        ):
+            raise TypeError(
+                "RunnableBranch default must be runnable, callable or mapping."
+            )
+
+        default_ = cast(
+            Runnable[Input, Output], coerce_to_runnable(cast(RunnableLike, default))
+        )
+
+        _branches = []
+
+        for branch in branches[:-1]:
+            if not isinstance(branch, (tuple, list)):  # type: ignore[arg-type]
+                raise TypeError(
+                    f"RunnableBranch branches must be "
+                    f"tuples or lists, not {type(branch)}"
+                )
+
+            if not len(branch) == 2:
+                raise ValueError(
+                    f"RunnableBranch branches must be "
+                    f"tuples or lists of length 2, not {len(branch)}"
+                )
+            condition, runnable = branch
+            condition = cast(Runnable[Input, bool], coerce_to_runnable(condition))
+            runnable = coerce_to_runnable(runnable)
+            _branches.append((condition, runnable))
+
+        super().__init__(branches=_branches, default=default_)  # type: ignore[call-arg]
+
+    def invoke(
+        self, input: Input, config: Optional[RunnableConfig] = None, **kwargs: Any
+    ) -> Output:
+        """First evaluates the condition, then delegate to true or false branch."""
+        config = ensure_config(config)
+        callback_manager = get_callback_manager_for_config(config)
+        run_manager = callback_manager.on_chain_start(
+            dumpd(self),
+            input,
+            name=config.get("run_name"),
+            run_id=config.pop("run_id", None),
+        )
+
+        try:
+            for idx, branch in enumerate(self.branches):
+                condition, runnable = branch
+
+                expression_value = condition.invoke(
+                    input,
+                    config=patch_config(
+                        config,
+                        callbacks=run_manager.get_child(tag=f"condition:{idx + 1}"),
+                    ),
+                )
+
+                if expression_value:
+                    output = runnable.invoke(
+                        input,
+                        config=patch_config(
+                            config,
+                            callbacks=run_manager.get_child(tag=f"branch:{idx + 1}"),
+                        ),
+                        **kwargs,
+                    )
+                    break
+            else:
+                output = self.default.invoke(
+                    input,
+                    config=patch_config(
+                        config, callbacks=run_manager.get_child(tag="branch:default")
+                    ),
+                    **kwargs,
+                )
+        except BaseException as e:
+            run_manager.on_chain_error(e)
+            raise
+        run_manager.on_chain_end(dumpd(output))
+        return output
+```
+
+这里看下来感觉Runnable的子类其实是遵循某种范式编写的:__init__初始化成员变量，再在invoke实现相应的逻辑。
+
+## 总结
+
+通过本文的深入探讨，我们可以看到LCEL（Langchain Expression Language）在Langchain框架中的重要性和创新性。LCEL的设计思想“一切组件皆可编排”使得AI应用的开发更加便捷和高效。我们通过实际的代码示例，展示了如何利用管道符号`|`来简化和优化LLMChain的串联操作。
+
+### 核心观点回顾
+
+1. **组件编排的简化**：
+    - 传统方法需要显式地创建并串联多个LLMChain，而LCEL则通过使用管道符号`|`极大地简化了这一过程。
+    - 这种编排方式不仅适用于LLMChain，还适用于Langchain中的其他组件如`PromptTemplate`、`ChatModel`、`Retriever`、`OutputParser`和`Tool`，甚至可以扩展到用户自定义的Python函数。
+
+2. **Runnable的核心作用**：
+    - LCEL引入了`Runnable`作为可编排组件的核心接口。`Runnable`定义了一系列抽象方法，如`invoke`、`stream`、`batch`等，这些方法为组件的自由编排提供了基础。
+    - `RunnableSerializable`是继承自`Runnable`并提供序列化功能的接口，成为Langchain组件统一的基础接口。
+
+3. **多种类型的Runnable**：
+    - **RunnableSequence**：用于串联多个Runnable实例，形成顺序执行的链条。
+    - **RunnableParallel**：用于并行执行多个Runnable实例，提高执行效率。
+    - **RunnableLambda**：将Python函数封装为Runnable，使得函数也能参与到LCEL的编排中。
+    - **RunnableBranch**：实现了条件分支逻辑，类似于RouterChain，用于根据条件选择不同的执行路径。
+
+### LCEL的优势
+
+- **高效开发**：通过简洁的语法和统一的接口，LCEL大大提高了AI应用开发的效率。
+- **灵活性**：支持多种类型的组件和自定义函数的编排，使得开发者可以根据具体需求灵活组合不同的组件。
+- **可扩展性**：通过定义明确的输入输出接口和抽象方法，LCEL为未来扩展和新组件的加入提供了良好的支持。
+
+希望这能帮助你更加深入地了解Langchain的底层原理，后续我会更新一篇关于介绍Langchain组件的文章，敬请关注～
