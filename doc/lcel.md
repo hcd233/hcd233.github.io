@@ -172,7 +172,7 @@ def __or__(
         return RunnableSequence(self, coerce_to_runnable(other))
 ```
 
-这些基本上就是`Runnable`最常用的方法了，其中`invoke`是抽象方法，意味着只要继承Runnable类你都必须重写这个`invoke`方法，并且`stream`, `batch`等方法都依赖`invoke`方法的实现，这里还可以看到它实现了__or__方法，通过`RunnableSequence`实现Runnable的组合，这里返回的变量注解写的`RunnableSerializable`类在后面会讲到
+这些基本上就是`Runnable`最常用的方法了，其中`invoke`是抽象方法，意味着只要继承Runnable类你都必须重写这个`invoke`方法，并且`stream`, `batch`等方法都依赖`invoke`方法的实现，这里还可以看到它实现了`__or__`方法，通过`RunnableSequence`实现Runnable的组合，这里返回的变量注解写的`RunnableSerializable`类在后面会讲到
 
 接下来我们直接来看他有哪些子类，这里如果你仔细看下来，你会发现只有一个叫`RunnableSerializable`的类继承了它，这里`RunnableSerializable`继承了Langchain的一个工具基类`Serializable`，用于方便Langchain组件进行序列化。
 
@@ -270,7 +270,7 @@ class RunnableSequence(RunnableSerializable[Input, Output]):
 
 ```
 
-看到这里应该有点感觉了，这里`RunnableSequence`就是为了串联Runnable而存在的，还记得我们前面的那段代码实例吗？在执行完overall_chain = chain1 | chain2 | chain3后，这里的overall_chain就会是一个`RunnableSequence`对象
+看到这里应该有点感觉了，这里`RunnableSequence`就是为了串联Runnable而存在的，还记得我们前面的那段代码实例吗？在执行完用管道串联三个chain后，这里的overall_chain就会是一个`RunnableSequence`对象
 
 ### RunnableParallel：并行Runnable的子类
 
